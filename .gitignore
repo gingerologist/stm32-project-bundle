@@ -1,0 +1,25 @@
+# occasional snapshot package (not necessary)
+**/*.zip
+
+# Eclipse workspace metadata
+**/.metadata/
+**/.plugins/
+
+# Build folders
+**/Debug/
+**/Release/
+**/build/
+
+# Generated files
+**/*.o
+**/*.d
+**/*.elf
+**/*.hex
+**/*.bin
+**/*.map
+
+# Eclipse project settings (optional, you might want to keep some)
+**/.settings/ 
+# **/.cproject
+# **/.project
+
