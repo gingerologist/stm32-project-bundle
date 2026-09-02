@@ -167,11 +167,15 @@ typedef union {
   struct __attribute__((packed)) {
     unsigned int r1 : 4;
     unsigned int dac_x_data : 12;
-  } dac63202;
+  } voltage_63202;
   struct __attribute__((packed)) {
     unsigned int r1 : 6;
     unsigned int dac_x_data : 10;
-  } dac53202;
+  } voltage_53202;
+  struct __attribute__((packed)) {
+    uint8_t r1;
+    uint8_t dac_x_data;
+  } current;
 } dac_x_data_t;
 
 _Static_assert(sizeof(dac_x_data_t) == 2, "");

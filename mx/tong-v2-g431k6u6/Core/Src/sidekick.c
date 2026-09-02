@@ -239,7 +239,7 @@ void dump_dac_registers(void) {
 #endif
 
   dac_read(RN_DAC_1_DATA, &data.val);
-  printf("dac-1-data: %u", data.dac53202.dac_x_data);
+  printf("dac-1-data: %u", data.current.dac_x_data);
 
   //  dac 0
 #if (DUMP_DAC_X_MARGIN == 1)
@@ -296,7 +296,7 @@ void dump_dac_registers(void) {
 #endif
 
   dac_read(RN_DAC_0_DATA, &data.val);
-  printf("dac-0-data: %u", data.dac53202.dac_x_data);
+  printf("dac-0-data: %u", data.current.dac_x_data);
 
   dac_read(RN_COMMON_CONFIG, &common_config.val);
   printf("common-config\r\n");
@@ -467,9 +467,9 @@ static void print_config(const char *name, bool *valid,
   }
 
   printf("%s config\r\n", name);
-  printf("  current: %u steps\r\n", current_config.current);
-  printf("    width: %u us\r\n", current_config.width);
-  printf("   period: %u ms\r\n", current_config.period);
+  printf("  current: %u steps\r\n", config->current);
+  printf("    width: %u us\r\n", config->width);
+  printf("   period: %u ms\r\n", config->period);
 }
 
 // set <current> <pulse width> <period>
@@ -678,7 +678,7 @@ static void start_current_sink(uint8_t step) {
   };
   dac_write(RN_COMMON_CONFIG, common_config.val);
 
-  dac_x_data_t dac_data = {.dac53202 = {.dac_x_data = 128 - step}};
+  dac_x_data_t dac_data = {.current = {.dac_x_data = 128 - step}};
   dac_write(RN_DAC_0_DATA, dac_data.val);
   dac_write(RN_DAC_1_DATA, dac_data.val);
 }
@@ -711,19 +711,12 @@ static void stop_opamp() {
 // active high
 static void switch_sourcing(void) {
   HAL_GPIO_WritePin(MUX_SEL1_GPIO_Port, MUX_SEL1_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(MUX_SEL2_GPIO_Port, MUX_SEL2_Pin, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(MUX_SEL3_GPIO_Port, MUX_SEL3_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(MUX_SEL4_GPIO_Port, MUX_SEL4_Pin, GPIO_PIN_RESET);
-}
-
-static void switch_sinking(void) {
-  HAL_GPIO_WritePin(MUX_SEL1_GPIO_Port, MUX_SEL1_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(MUX_SEL2_GPIO_Port, MUX_SEL2_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(MUX_SEL3_GPIO_Port, MUX_SEL3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(MUX_SEL3_GPIO_Port, MUX_SEL3_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(MUX_SEL4_GPIO_Port, MUX_SEL4_Pin, GPIO_PIN_SET);
 }
 
-static void switch_relax(void) {
+static void switch_sinking(void) {
   HAL_GPIO_WritePin(MUX_SEL1_GPIO_Port, MUX_SEL1_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(MUX_SEL2_GPIO_Port, MUX_SEL2_Pin, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(MUX_SEL3_GPIO_Port, MUX_SEL3_Pin, GPIO_PIN_RESET);
@@ -768,22 +761,94 @@ static void disable_hv_power(void) {
 // __HAL_TIM_SET_AUTORELOAD(&htim2, 1999);
 // HAL_TIM_Base_Start_IT(&htim2);
 
+const uint8_t steps[4] = {0, 32, 64, 96};
+
+static void do_pulse(unsigned int width, bool dry) {
+  // static int roll = 0;
+
+  //  dac_x_data_t dac_data = {.current = {.dac_x_data = steps[roll]}};
+  //  dac_write(RN_DAC_0_DATA, dac_data.val);
+  //  dac_write(RN_DAC_1_DATA, dac_data.val);
+  //
+  //  roll = (roll + 1) & 0x03;
+
+  uint32_t timestamps[6];
+
+  timestamps[0] = tim_counter();
+  start_opamp();
+  tim_delay_us(250);
+  timestamps[1] = tim_counter();
+
+  switch_sourcing();
+  switch_on();
+  tim_delay_us(width);
+  timestamps[2] = tim_counter();
+
+  switch_off();
+  switch_sinking();
+  tim_delay_us(10);
+  timestamps[3] = tim_counter();
+
+  switch_on();
+  tim_delay_us(width);
+  timestamps[4] = tim_counter();
+
+  switch_off();
+  stop_opamp();
+  timestamps[5] = tim_counter();
+
+  if (dry) {
+    printf("pulse timing: \r\n");
+    for (int i = 1; i < 6; i++) {
+      printf("  %lu\r\n", timestamps[i] - timestamps[i - 1]);
+    }
+  }
+}
+
+typedef enum {
+  SWTST_ALL_OFF,
+  SWTST_SOURCING,
+  SWTST_SINKING
+} switch_test_case_t;
+
+void switch_test(switch_test_case_t test) {
+  switch_off();
+
+  switch (test) {
+  case SWTST_ALL_OFF:
+    break;
+  case SWTST_SOURCING:
+    switch_sourcing();
+    switch_on();
+    break;
+  case SWTST_SINKING:
+    switch_sinking();
+    switch_on();
+    break;
+  }
+}
+
 void StartPulseTask(void const *argument) {
+  for (int i = 0; i < 2; i++) {
+    pulse_config_t *p = &pulse_config[i];
+    xQueueSend(configIdleQueueHandle, &p, portMAX_DELAY);
+  }
 
   TickType_t ticks_to_wait = portMAX_DELAY;
   pulse_config_t config    = {.width = 500};
 
+  enable_hv_power();
+
   dac_enable_sdo();
   dump_dac_registers();
-
-  enable_hv_power();
 
   printf("\r\n\r\n"
          "start pulse task\r\n");
 
-  for (int i = 0; i < 2; i++) {
-    xQueueSend(configIdleQueueHandle, &pulse_config[i], portMAX_DELAY);
-  }
+#if 0
+  switch_test(SWTST_ALL_OFF);
+  vTaskDelay(portMAX_DELAY);
+#endif
 
   init_current_sink();
 
@@ -807,23 +872,7 @@ void StartPulseTask(void const *argument) {
 
       continue;
     } else {
-      start_opamp();
-      tim_delay_us(10);
-
-      switch_sourcing();
-      switch_on();
-      tim_delay_us(config.width);
-
-      switch_off();
-      switch_sinking();
-      tim_delay_us(10);
-
-      switch_on();
-      tim_delay_us(config.width);
-
-      switch_off();
-      switch_relax();
-      stop_opamp();
+      do_pulse(config.width, false);
     }
   }
 }
