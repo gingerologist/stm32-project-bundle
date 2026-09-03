@@ -50,8 +50,8 @@ Flash的具体定义在rm0440文档中，category的定义在1.5，G431都是Cat
 代码修改首先从这里开始。计划：
 
 - [x] 修改flash地址；
-- [ ] 修改新增的引脚；
-- [ ] 修改bleeding；
+- [x] 修改新增的引脚；
+- [x] 修改bleeding；注意！TMUX7234的EN脚是active low的，GPIO配置和代码应该和MUX_EN引脚一致；
 - [ ] 实现新栋的新需求；
 
 
