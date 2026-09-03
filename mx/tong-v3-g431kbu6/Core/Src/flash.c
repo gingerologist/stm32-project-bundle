@@ -12,9 +12,9 @@
 
 #define MAGIC                 0xDEADBEEF
 
-#define FLASH_LAST_PAGE       15
-#define FLASH_LAST_PAGE_ADDR0 0x08007800
-#define FLASH_LAST_PAGE_ADDR1 0x08007808
+#define FLASH_LAST_PAGE       63
+#define FLASH_LAST_PAGE_ADDR0 0x0801F800
+#define FLASH_LAST_PAGE_ADDR1 0x0801F808
 
 HAL_StatusTypeDef save_config(pulse_config_t *pcfg) {
   HAL_StatusTypeDef status;
@@ -40,7 +40,7 @@ HAL_StatusTypeDef save_config(pulse_config_t *pcfg) {
   // 3. clear pending error flags
   __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_ALL_ERRORS);
 
-  // 4. set up erase configuration for page 15
+  // 4. set up erase configuration for last page
   FLASH_EraseInitTypeDef erase_config = {.TypeErase = FLASH_TYPEERASE_PAGES,
                                          .Banks     = FLASH_BANK_1,
                                          .Page      = FLASH_LAST_PAGE,
