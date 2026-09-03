@@ -57,6 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define BLEED_EN_Pin GPIO_PIN_0
+#define BLEED_EN_GPIO_Port GPIOA
 #define EN_NEG_HV_Pin GPIO_PIN_3
 #define EN_NEG_HV_GPIO_Port GPIOA
 #define SPI_NSS_Pin GPIO_PIN_4
@@ -77,6 +79,8 @@ void Error_Handler(void);
 #define MUX_SEL4_GPIO_Port GPIOB
 #define MUX_SEL1_Pin GPIO_PIN_6
 #define MUX_SEL1_GPIO_Port GPIOB
+#define BLEED_SEL_Pin GPIO_PIN_7
+#define BLEED_SEL_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

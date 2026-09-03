@@ -354,16 +354,23 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, EN_NEG_HV_Pin|MUX_SEL2_Pin|MUX_SEL3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, BLEED_EN_Pin|EN_NEG_HV_Pin|MUX_SEL2_Pin|MUX_SEL3_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, SPI_NSS_Pin|CH0_SD_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, EN_POS_HV_Pin|MUX_SEL4_Pin|MUX_SEL1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, EN_POS_HV_Pin|MUX_SEL4_Pin|MUX_SEL1_Pin|BLEED_SEL_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, CH1_SD_Pin|MUX_EN_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pins : BLEED_EN_Pin MUX_SEL2_Pin MUX_SEL3_Pin */
+  GPIO_InitStruct.Pin = BLEED_EN_Pin|MUX_SEL2_Pin|MUX_SEL3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : EN_NEG_HV_Pin CH0_SD_Pin */
   GPIO_InitStruct.Pin = EN_NEG_HV_Pin|CH0_SD_Pin;
@@ -386,15 +393,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : MUX_SEL2_Pin MUX_SEL3_Pin */
-  GPIO_InitStruct.Pin = MUX_SEL2_Pin|MUX_SEL3_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : MUX_EN_Pin MUX_SEL4_Pin MUX_SEL1_Pin */
-  GPIO_InitStruct.Pin = MUX_EN_Pin|MUX_SEL4_Pin|MUX_SEL1_Pin;
+  /*Configure GPIO pins : MUX_EN_Pin MUX_SEL4_Pin MUX_SEL1_Pin BLEED_SEL_Pin */
+  GPIO_InitStruct.Pin = MUX_EN_Pin|MUX_SEL4_Pin|MUX_SEL1_Pin|BLEED_SEL_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
