@@ -733,6 +733,14 @@ static void switch_off(void) {
   HAL_GPIO_WritePin(MUX_EN_GPIO_Port, MUX_EN_Pin, GPIO_PIN_SET);
 }
 
+static void bleed_on(void) {
+  HAL_GPIO_WritePin(BLEED_EN_GPIO_Port, BLEED_EN_Pin, GPIO_PIN_RESET);
+}
+
+static void bleed_off(void) {
+  HAL_GPIO_WritePin(BLEED_EN_GPIO_Port, BLEED_EN_Pin, GPIO_PIN_SET);
+}
+
 static void start_timer() {
   __HAL_TIM_SET_AUTORELOAD(&htim2, 0xffffffff);
   HAL_TIM_Base_Start(&htim2);
@@ -763,7 +771,7 @@ static void disable_hv_power(void) {
 
 const uint8_t steps[4] = {0, 32, 64, 96};
 
-static void do_pulse(unsigned int width, bool dry) {
+static void do_pulse(unsigned int width, bool print) {
   // static int roll = 0;
 
   //  dac_x_data_t dac_data = {.current = {.dac_x_data = steps[roll]}};
@@ -795,9 +803,16 @@ static void do_pulse(unsigned int width, bool dry) {
 
   switch_off();
   stop_opamp();
+
+  tim_delay_us(1);
+
+  bleed_on();
+  tim_delay_us(10);
+  bleed_off();
+
   timestamps[5] = tim_counter();
 
-  if (dry) {
+  if (print) {
     printf("pulse timing: \r\n");
     for (int i = 1; i < 6; i++) {
       printf("  %lu\r\n", timestamps[i] - timestamps[i - 1]);

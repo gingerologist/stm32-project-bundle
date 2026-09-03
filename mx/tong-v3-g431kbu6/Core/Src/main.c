@@ -354,10 +354,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, BLEED_EN_Pin|EN_NEG_HV_Pin|MUX_SEL2_Pin|MUX_SEL3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, BLEED_EN_Pin|SPI_NSS_Pin|CH0_SD_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, SPI_NSS_Pin|CH0_SD_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOA, EN_NEG_HV_Pin|MUX_SEL2_Pin|MUX_SEL3_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, EN_POS_HV_Pin|MUX_SEL4_Pin|MUX_SEL1_Pin|BLEED_SEL_Pin, GPIO_PIN_RESET);
