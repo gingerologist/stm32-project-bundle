@@ -469,7 +469,12 @@ static void print_config(const char *name, bool *valid,
   printf("%s config\r\n", name);
   printf("  current: %u steps\r\n", config->current);
   printf("    width: %u us\r\n", config->width);
-  printf("   period: %u ms\r\n", config->period);
+  if (config->period > 0) {
+    printf("   period: %u ms\r\n", config->period);
+  } else {
+    printf("   period: 0, predefined 6s/4s pattern for 4 (5-min) periods\r\n");
+    printf("           with 3Hz/3Hz/10Hz/20Hz respectively.\r\n");
+  }
 }
 
 // set <current> <pulse width> <period>
@@ -496,7 +501,8 @@ static void CLI_CMD_Set(EmbeddedCli *cli, char *args, void *context) {
   }
 
   period = parse_max5_digits(embeddedCliGetToken(args, 3));
-  if (period < 50 || period > 500) {
+  if (period == 0) {
+  } else if (period < 50 || period > 500) {
     printf("invalid period\r\n");
     return;
   }
@@ -511,8 +517,8 @@ CliCommandBinding cli_cmd_set_binding = {
     "set",
     "set pulse parameters\r\n"
     "        set <current:1-128 steps> <pulse width: 100-1000 micro-seconds> "
-    "<period: 50-500 milli-seconds>\r\n"
-    "        example: set 64 200 100",
+    "<period: 50-500 milli-seconds, or 0 for predefined daily pattern>\r\n"
+    "        example: set 64 200 100\r\n",
     true, NULL, CLI_CMD_Set};
 
 static void CLI_CMD_Show(EmbeddedCli *cli, char *args, void *context) {
@@ -604,6 +610,9 @@ void StartDefaultTask(void const *argument) {
 
   if (load_config(&current_config, true)) {
     current_config_valid = true;
+    print_config("current (autoload)", &current_config_valid, &current_config);
+    printf("stimulation will start in 10 seconds\r\n");
+    vTaskDelay(10000);
     start_stimulation();
   }
 
@@ -843,6 +852,7 @@ void switch_test(switch_test_case_t test) {
   }
 }
 
+#if 0
 void StartPulseTask(void const *argument) {
   for (int i = 0; i < 2; i++) {
     pulse_config_t *p = &pulse_config[i];
@@ -860,10 +870,10 @@ void StartPulseTask(void const *argument) {
   printf("\r\n\r\n"
          "start pulse task\r\n");
 
-#if 0
-  switch_test(SWTST_ALL_OFF);
-  vTaskDelay(portMAX_DELAY);
-#endif
+// #if 0
+//  switch_test(SWTST_ALL_OFF);
+//  vTaskDelay(portMAX_DELAY);
+// #endif
 
   init_current_sink();
 
@@ -888,6 +898,140 @@ void StartPulseTask(void const *argument) {
       continue;
     } else {
       do_pulse(config.width, false);
+    }
+  }
+}
+#endif
+
+void run_endless_mode(pulse_config_t *config) {
+  // --- Mode A: Endless Running Mode ---
+  do_pulse(config->width, false);
+
+  // Use vTaskDelay for period spacing, but break early if config changes
+  TickType_t start_tick  = xTaskGetTickCount();
+  TickType_t delay_ticks = pdMS_TO_TICKS(config->period);
+  while ((xTaskGetTickCount() - start_tick) < delay_ticks) {
+    if (uxQueueMessagesWaiting(configPendingQueueHandle) > 0) {
+      break; // Exit delay early to process new config/stop command
+             // immediately
+    }
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+}
+
+/**
+ * @brief Runs a 10-second pattern: 6 seconds active pulsing, 4 seconds idle.
+ *
+ * @param config Pointer to configuration struct containing pulse width
+ * @param period Stimulation period in milliseconds for active pulses
+ * @return true if interrupted by a new queue message, false if 10s elapses
+ * fully
+ */
+bool run_10s(pulse_config_t *config, int period) {
+  TickType_t start_tick   = xTaskGetTickCount();
+  TickType_t active_ticks = pdMS_TO_TICKS(6000);  // 6 seconds active
+  TickType_t total_ticks  = pdMS_TO_TICKS(10000); // 10 seconds total
+
+  // --- Phase 1: 6-second Active Phase ---
+  while ((xTaskGetTickCount() - start_tick) < active_ticks) {
+    if (uxQueueMessagesWaiting(configPendingQueueHandle) > 0) {
+      return true; // Interrupted
+    }
+
+    do_pulse(config->width, false);
+
+    // Delay for 'period' ms while checking for queue interruption
+    TickType_t pulse_start  = xTaskGetTickCount();
+    TickType_t period_ticks = pdMS_TO_TICKS(period);
+
+    while ((xTaskGetTickCount() - pulse_start) < period_ticks) {
+      if (uxQueueMessagesWaiting(configPendingQueueHandle) > 0) {
+        return true; // Interrupted
+      }
+      vTaskDelay(pdMS_TO_TICKS(1));
+    }
+  }
+
+  // --- Phase 2: 4-second Idle Phase ---
+  while ((xTaskGetTickCount() - start_tick) < total_ticks) {
+    if (uxQueueMessagesWaiting(configPendingQueueHandle) > 0) {
+      return true; // Interrupted
+    }
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+
+  return false; // Completed full 10s without interruption
+}
+
+void StartPulseTask(void const *argument) {
+  for (int i = 0; i < 2; i++) {
+    pulse_config_t *p = &pulse_config[i];
+    xQueueSend(configIdleQueueHandle, &p, portMAX_DELAY);
+  }
+
+  pulse_config_t config = {.width = 500};
+  bool is_running       = false;
+
+  enable_hv_power();
+  dac_enable_sdo();
+  dump_dac_registers();
+
+  printf("\r\n\r\nstart pulse task\r\n");
+  init_current_sink();
+
+  for (;;) {
+    // 1. Non-blocking check for new configuration or stop command
+    pulse_config_t *pcfg;
+    if (xQueueReceive(configPendingQueueHandle, &pcfg, 0) == pdPASS) {
+      if (pcfg == NULL) {
+        // Stop command received
+        stop_current_sink();
+        stop_timer();
+        is_running = false;
+        continue;
+      } else {
+        // New configuration loaded
+        config = *pcfg;
+        start_timer();
+        start_current_sink(config.current);
+        is_running = true;
+        xQueueSend(configIdleQueueHandle, &pcfg, portMAX_DELAY);
+      }
+    }
+
+    if (!is_running) {
+      // Idle state: block briefly until a command arrives to save CPU cycles
+      vTaskDelay(pdMS_TO_TICKS(10));
+      continue;
+    }
+
+    // 2. Execution Mode Handler
+    if (config.period > 0) {
+      run_endless_mode(&config);
+    } else {
+      // --- Mode B: Predefined / Fixed Pattern Mode ---
+      bool interrupted    = false;
+      int phase_period[4] = {333, 333, 100, 50}; // 3Hz, 3Hz, 10Hz, 20Hz
+
+      for (int phase = 0; phase < 4; phase++) {
+        printf("daily pattern phase %i: %ims period for 5 minutes\r\n", phase,
+               phase_period[phase]);
+        for (int times = 0; times < 5 * 6; times++) { // Fixed typo here
+          interrupted = run_10s(&config, phase_period[phase]);
+          if (interrupted)
+            break;
+        }
+        if (interrupted)
+          break;
+      }
+
+      // Only shut down if the sequence completed naturally
+      if (!interrupted) {
+        stop_current_sink();
+        stop_timer();
+        is_running = false;
+        printf("daily pattern finished\r\n");
+      }
     }
   }
 }
