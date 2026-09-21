@@ -761,8 +761,13 @@ static inline uint32_t tim_counter() { return __HAL_TIM_GET_COUNTER(&htim2); }
 
 static void tim_delay_us(unsigned int us) {
   uint32_t mark = tim_counter();
-  while (htim2.State == HAL_TIM_STATE_BUSY && tim_counter() - mark < us)
-    ;
+
+  //  while (htim2.State == HAL_TIM_STATE_BUSY && tim_counter() - mark < us)
+  //    ;
+
+  while (tim_counter() - mark < us) {
+    __NOP();
+  }
 }
 
 static void enable_hv_power(void) {
